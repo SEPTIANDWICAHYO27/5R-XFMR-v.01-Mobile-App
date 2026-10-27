@@ -7,7 +7,7 @@ self.XF_CONFIG = {
   UNIT: 'Asam Sulfat & Utilitas IIIB',
 
   // WAJIB: URL deployment Web App Apps Script
-  API_URL: 'https://script.google.com/macros/s/AKfycbwH5THLO9hQjBWEnb_IImtB6rNW0uO0qzmlN4DT5b4fVfgZoae1XMf8bpPQQ3v0Lta-/exec',
+  API_URL: 'https://script.google.com/macros/s/AKfycbzPBvBy3L7ZFA4c555JLUktDPbDQUGedTQfaMbLKD8sKfBc26-84VxcIEWJweIhRgcm/exec',
 
   // OPSIONAL (Push Notification via Firebase Cloud Messaging).
   // Biarkan null bila belum dipakai → aplikasi tetap memberi notifikasi
