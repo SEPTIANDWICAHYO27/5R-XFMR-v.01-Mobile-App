@@ -39,7 +39,7 @@
   const S = {
     user: null, areas: [], users: [], schedules: [], reports: [],
     pending: 0, online: navigator.onLine, installEvt: null, draft: null,
-    filter: { status: 'aktif', area: '' }, rank: { tab: 'poin', period: 'month' }
+    filter: null, rank: { tab: 'poin', period: 'month' }
   };
   const roleKey = (r) => {
     r = String(r || '').toUpperCase();
@@ -90,6 +90,7 @@
   const petugasList = () => S.users.filter((u) => u.roleKey === 'TKNO' || u.roleKey === 'TKO');
   const catOf = (k) => CATS.find((c) => c.k === k) || CATS[CATS.length - 1];
   const sortByTime = (a, b) => new Date(b.Timestamp) - new Date(a.Timestamp);
+  const defFilter = (o) => Object.assign({ status: '', area: '', period: 'month', q: '', scope: 'mine', limit: 40 }, o || {});
   const prioRank = (p) => ({ Darurat: 0, Tinggi: 1 }[p] ?? 2);
 
   function toast(msg, type) {
@@ -386,20 +387,140 @@
   /* =========================================================
    * VIEW: Daftar laporan
    * ========================================================= */
-  function viewList() {
+  /* =========================================================
+   * VIEW: History — terstruktur & informatif
+   * ========================================================= */
+  const PERIODS = [['today', 'Hari Ini'], ['7d', '7 Hari'], ['month', 'Bulan Ini'], ['all', 'Semua']];
+  function periodStart(p) {
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    if (p === 'today') return d;
+    if (p === '7d') { d.setDate(d.getDate() - 6); return d; }
+    if (p === 'month') { d.setDate(1); return d; }
+    return new Date(0);
+  }
+  function histBase() {
     const f = S.filter;
-    let list = S.reports.slice();
-    if (role() === 'TKNO') list = list.filter((r) => String(r.ID_Petugas) === me() || (!r.ID_Petugas && r.Status === 'Pending'));
-    if (f.status === 'aktif') list = list.filter((r) => r.Status !== 'Verified');
-    else if (f.status) list = list.filter((r) => r.Status === f.status);
+    const from = periodStart(f.period);
+    let list = S.reports.filter((r) => new Date(r.Timestamp) >= from);
+    if (f.scope === 'mine' && !isApprover()) list = list.filter((r) => String(r.ID_Pelapor) === me() || String(r.ID_Petugas) === me());
     if (f.area) list = list.filter((r) => r.ID_Area === f.area);
-    const chips = [['aktif', 'Aktif'], ['', 'Semua']].concat(STATUSES.map((s) => [s, ST[s].l]));
+    if (f.q) {
+      const q = f.q.toLowerCase();
+      list = list.filter((r) => [r.ID_Laporan, r.Kategori, r.Titik, r.Deskripsi, r.Nama_Petugas, r.Nama_Pelapor, areaShort(r.ID_Area)].join(' ').toLowerCase().includes(q));
+    }
+    return list;
+  }
+  function histFiltered(base) {
+    const f = S.filter;
+    if (f.status === 'aktif') return base.filter((r) => r.Status !== 'Verified');
+    if (f.status === 'telat') return base.filter(isLate);
+    if (f.status) return base.filter((r) => r.Status === f.status);
+    return base;
+  }
+  function dayLabel(v) {
+    const d = new Date(v); d.setHours(0, 0, 0, 0);
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    const diff = Math.round((t - d) / 864e5);
+    if (diff === 0) return 'Hari Ini';
+    if (diff === 1) return 'Kemarin';
+    return new Date(v).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  }
+  function miniSteps(r) {
+    const idx = Math.max(0, STATUSES.indexOf(r.Status));
+    return '<div class="hsteps">' + STATUSES.map((s, i) => '<i class="' + (i <= idx ? 'on ' + ST[s].c : '') + '" title="' + ST[s].l + '"></i>').join('') + '</div>';
+  }
+  function histCard(r) {
+    const cat = catOf(r.Kategori);
+    const dur = mins(r.Started_At || r.Timestamp, r.Resolved_At);
+    const resp = mins(r.Timestamp, r.Started_At);
+    const thumb = (u, l) => '<span class="hph">' + (u ? '<img loading="lazy" src="' + esc(u) + '" alt="">' : ic('camera')) + '<em>' + l + '</em></span>';
+    return '<a class="hcard" href="#/r/' + encodeURIComponent(r.ID_Laporan) + '" style="--ac:' + areaColor(r.ID_Area) + '">' +
+      '<div class="hc-top"><span class="hc-id">' + esc(r.ID_Laporan.indexOf('L-') === 0 ? 'Belum terkirim' : r.ID_Laporan) + '</span>' +
+      '<span class="hc-time">' + ic('clock') + new Date(r.Timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + '</span></div>' +
+      '<div class="hc-main"><div class="hc-ph">' + thumb(r.Foto_Before_URL, 'SEBELUM') + thumb(r.Foto_After_URL, 'SESUDAH') + '</div>' +
+      '<div class="hc-info"><div class="rrow">' + statusChip(r.Status) +
+      (r.Prioritas && r.Prioritas !== 'Normal' ? '<span class="chip prio-' + esc(r.Prioritas) + '">' + esc(r.Prioritas) + '</span>' : '') +
+      (isLate(r) ? '<span class="chip prio-Darurat">TELAT</span>' : '') +
+      (r._local || r._dirty ? '<span class="chip chip-sync">' + ic('cloud') + '</span>' : '') + '</div>' +
+      '<b class="hc-title">' + cat.e + '\u00a0' + esc(r.Kategori).replace('/', '/<wbr>') + '</b>' +
+      '<span class="hc-loc">' + ic('pin') + esc(r.ID_Area) + ' · ' + esc(areaShort(r.ID_Area)) + (r.Titik ? ' — ' + esc(r.Titik) : '') + '</span>' +
+      miniSteps(r) + '</div></div>' +
+      '<dl class="hc-meta">' +
+      '<div><dt>Pelapor</dt><dd>' + esc((r.Nama_Pelapor || userName(r.ID_Pelapor) || '-').split(' ').slice(0, 2).join(' ')) + '</dd></div>' +
+      '<div><dt>Petugas</dt><dd>' + esc(r.Nama_Petugas ? r.Nama_Petugas.split(' ').slice(0, 2).join(' ') : '—') + '</dd></div>' +
+      '<div><dt>Respon</dt><dd>' + (resp != null && resp >= 0 ? fmtDur(resp) : '—') + '</dd></div>' +
+      '<div><dt>Durasi</dt><dd>' + (r.Resolved_At && dur >= 0 ? fmtDur(dur) : '—') + '</dd></div>' +
+      '<div><dt>Rating</dt><dd class="star">' + (+r.Rating ? '★'.repeat(+r.Rating) : '—') + '</dd></div>' +
+      '<div><dt>Poin</dt><dd>' + (+r.Poin ? '+' + r.Poin : '—') + '</dd></div>' +
+      '</dl>' + (r.Deskripsi ? '<p class="hc-desc">' + esc(r.Deskripsi) + '</p>' : '') + '</a>';
+  }
+  function renderHist() {
+    const box = $('#histBody'); if (!box) return;
+    const base = histBase();
+    const list = histFiltered(base).slice().sort(sortByTime);
+    const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+    const done = base.filter((r) => ['Resolved', 'Verified'].includes(r.Status));
+    const durs = done.map((r) => mins(r.Started_At || r.Timestamp, r.Resolved_At)).filter((v) => v != null && v >= 0);
+    const rates = base.map((r) => +r.Rating).filter(Boolean);
+    const pct = base.length ? Math.round(done.length / base.length * 100) : 0;
+    const cnt = (s) => base.filter((r) => r.Status === s).length;
+    const late = base.filter(isLate).length;
+    const f = S.filter;
+    // Ringkasan + filter status yang bisa diketuk
+    let html = '<div class="hsum">' +
+      '<div class="hsum-top"><div><small>Total laporan</small><b>' + base.length + '</b></div>' +
+      '<div class="ring" style="--p:' + pct + '"><span>' + pct + '%</span><small>selesai</small></div></div>' +
+      '<div class="hsum-stats"><div><small>Rata² durasi</small><b>' + fmtDur(avg(durs)) + '</b></div>' +
+      '<div><small>Rata² rating</small><b>' + (avg(rates) ? avg(rates).toFixed(1).replace('.', ',') + ' ★' : '—') + '</b></div>' +
+      '<div><small>Terlambat</small><b class="' + (late ? 'bad' : '') + '">' + late + '</b></div></div>' +
+      '<div class="hsum-st">' + [['', 'SEMUA', base.length]].concat(STATUSES.map((s) => [s, { 'Pending': 'TUNGGU', 'In Progress': 'PROSES', 'Resolved': 'SELESAI', 'Verified': 'VERIFIED' }[s], cnt(s)])).concat(late ? [['telat', 'TELAT', late]] : []).map((c) =>
+        '<button class="hst ' + (c[0] ? (ST[c[0]] ? ST[c[0]].c : 'prio-Darurat') : '') + (f.status === c[0] ? ' on' : '') + '" data-act="setFilter" data-k="status" data-v="' + c[0] + '"><b>' + c[2] + '</b><span>' + c[1] + '</span></button>').join('') + '</div></div>';
+    if (!list.length) {
+      html += empty('🗂️', 'Tidak ada riwayat', f.q ? 'Tidak ada yang cocok dengan “' + f.q + '”' : 'Coba ganti periode atau filter');
+    } else {
+      // Kelompok per tanggal
+      const shown = list.slice(0, f.limit);
+      let curDay = '';
+      html += '<p class="count">Menampilkan ' + shown.length + ' dari ' + list.length + ' laporan</p>';
+      shown.forEach((r) => {
+        const dl = dayLabel(r.Timestamp);
+        if (dl !== curDay) {
+          const n = list.filter((x) => dayLabel(x.Timestamp) === dl).length;
+          html += '<h3 class="hday"><span>' + esc(dl) + '</span><em>' + n + '</em></h3>';
+          curDay = dl;
+        }
+        html += histCard(r);
+      });
+      if (list.length > shown.length) html += '<button class="btn btn-ghost btn-xl" data-act="histMore">MUAT ' + Math.min(40, list.length - shown.length) + ' LAGI</button>';
+    }
+    box.innerHTML = html;
+  }
+  function viewList() {
+    if (!S.filter) S.filter = defFilter({ scope: isApprover() ? 'all' : 'mine' });
+    const f = S.filter;
     shell('History',
-      '<div class="chips scroll">' + chips.map((c) => '<button class="fchip ' + (f.status === c[0] ? 'on' : '') + '" data-act="setFilter" data-k="status" data-v="' + c[0] + '">' + c[1] + '</button>').join('') + '</div>' +
+      '<div class="hsearch">' + ic('list') + '<input id="hq" type="search" placeholder="Cari ID, kategori, titik, petugas…" value="' + esc(f.q) + '">' +
+      (isApprover() ? '<button class="iconbtn" data-act="exportCsv" aria-label="Unduh CSV" title="Unduh CSV">' + ic('download') + '</button>' : '') + '</div>' +
+      (!isApprover() ? '<div class="seg sm">' + [['mine', role() === 'TKNO' ? 'Tugas Saya' : 'Laporan Saya'], ['all', 'Semua']].map((x) =>
+        '<button class="' + (f.scope === x[0] ? 'on' : '') + '" data-act="setFilter" data-k="scope" data-v="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>' : '') +
+      '<div class="chips scroll">' + PERIODS.map((c) => '<button class="fchip ' + (f.period === c[0] ? 'on' : '') + '" data-act="setFilter" data-k="period" data-v="' + c[0] + '">' + ic('calendar') + ' ' + c[1] + '</button>').join('') + '</div>' +
       '<div class="chips scroll">' + [['', 'Semua Area']].concat(S.areas.map((a) => [a.ID_Area, a.ID_Area + ' · ' + a.Nama_Area])).map((c) =>
         '<button class="fchip ' + (f.area === c[0] ? 'on' : '') + '" data-act="setFilter" data-k="area" data-v="' + c[0] + '">' + esc(c[1]) + '</button>').join('') + '</div>' +
-      '<p class="count">' + list.length + ' laporan</p>' +
-      (list.length ? list.slice(0, 150).map((r) => card(r)).join('') : empty('🔍', 'Tidak ada data', 'Coba ganti filter')));
+      '<div id="histBody"></div>');
+    renderHist();
+    let t;
+    $('#hq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { S.filter.q = e.target.value.trim(); S.filter.limit = 40; renderHist(); }, 250); };
+  }
+  function exportCsv() {
+    const list = histFiltered(histBase()).slice().sort(sortByTime);
+    const cols = ['ID_Laporan', 'Timestamp', 'ID_Area', 'Nama_Area', 'Titik', 'Kategori', 'Deskripsi', 'Prioritas', 'Status', 'Nama_Pelapor', 'Nama_Petugas', 'Started_At', 'Resolved_At', 'Verified_At', 'Rating', 'Feedback', 'Poin', 'Foto_Before_URL', 'Foto_After_URL'];
+    const cell = (v) => { v = v == null ? '' : String(v); if (/^data:/.test(v)) v = '(belum terkirim)'; return /[",\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    const csv = '﻿' + cols.join(',') + '\n' + list.map((r) => cols.map((c) => cell(r[c])).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const d = new Date(); a.download = 'History_5R_XFMR_' + d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + '.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    toast(list.length + ' laporan diunduh', 'ok');
   }
 
   /* =========================================================
@@ -736,9 +857,11 @@
     back: () => (history.length > 1 ? history.back() : (location.hash = '#/')),
     togglePw: (b) => { const i = b.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; b.textContent = i.type === 'password' ? 'LIHAT' : 'TUTUP'; },
     syncNow: () => { if (!navigator.onLine) return toast('Belum ada sinyal. Data aman tersimpan di HP.', 'err'); toast('Menyinkronkan…'); refresh({ manual: true, boot: true }); },
-    setFilter: (b) => { S.filter[b.dataset.k] = b.dataset.v; viewList(); },
-    filterArea: (b, e) => { e.preventDefault(); S.filter = { status: 'aktif', area: b.dataset.id }; location.hash = '#/laporan'; },
-    filterStatus: (b, e) => { e.preventDefault(); S.filter = { status: b.dataset.s, area: '' }; location.hash = '#/laporan'; },
+    setFilter: (b) => { S.filter[b.dataset.k] = b.dataset.v; S.filter.limit = 40; viewList(); },
+    histMore: () => { S.filter.limit += 40; renderHist(); },
+    exportCsv: () => exportCsv(),
+    filterArea: (b, e) => { e.preventDefault(); S.filter = defFilter({ area: b.dataset.id, scope: 'all', period: 'all', status: 'aktif' }); location.hash = '#/laporan'; },
+    filterStatus: (b, e) => { e.preventDefault(); S.filter = defFilter({ status: b.dataset.s, scope: 'all', period: 'all' }); location.hash = '#/laporan'; },
     zoom: (img) => sheet('<img class="zoom" src="' + esc(img.src) + '" alt=""><button class="btn btn-ghost btn-xl" data-close>TUTUP</button>'),
 
     /* --- Lapor wizard --- */
