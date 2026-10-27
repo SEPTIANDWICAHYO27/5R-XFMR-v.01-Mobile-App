@@ -1,0 +1,25 @@
+{
+  "id": "./?app=5r-xfmr",
+  "name": "5R XFMR — Asam Sulfat & Utilitas IIIB",
+  "short_name": "5R XFMR",
+  "description": "Monitoring, pelaporan & pengelolaan kebersihan area plant 5R XFMR Asam Sulfat & Utilitas IIIB",
+  "lang": "id",
+  "dir": "ltr",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#E9ECF1",
+  "theme_color": "#1B2A5B",
+  "categories": ["productivity", "business", "utilities"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Lapor Area Kotor", "short_name": "Lapor", "url": "./#/lapor", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Tugas Saya", "short_name": "Tugas", "url": "./#/", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
