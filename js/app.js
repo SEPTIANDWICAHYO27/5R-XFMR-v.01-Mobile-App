@@ -206,9 +206,9 @@
   /* ---------------- Shell ---------------- */
   function navItems() {
     const r = role();
-    if (r === 'TKNO') return [['', 'home', 'Tugas'], ['laporan', 'list', 'Riwayat'], ['lapor', 'camera', 'Lapor', 1], ['peringkat', 'trophy', 'Peringkat'], ['profil', 'user', 'Saya']];
-    if (isApprover()) return [['', 'grid', 'Dashboard'], ['laporan', 'list', 'Laporan'], ['lapor', 'camera', 'Lapor', 1], ['jadwal', 'calendar', 'Jadwal'], ['profil', 'user', 'Saya']];
-    return [['', 'home', 'Beranda'], ['laporan', 'list', 'Laporan'], ['lapor', 'camera', 'Lapor', 1], ['peringkat', 'trophy', 'Peringkat'], ['profil', 'user', 'Saya']];
+    if (r === 'TKNO') return [['', 'home', 'Tugas'], ['laporan', 'list', 'History'], ['lapor', 'camera', 'Lapor', 1], ['peringkat', 'trophy', 'Peringkat'], ['profil', 'user', 'Saya']];
+    if (isApprover()) return [['', 'grid', 'Dashboard'], ['laporan', 'list', 'History'], ['lapor', 'camera', 'Lapor', 1], ['jadwal', 'calendar', 'Jadwal'], ['profil', 'user', 'Saya']];
+    return [['', 'home', 'Beranda'], ['laporan', 'list', 'History'], ['lapor', 'camera', 'Lapor', 1], ['peringkat', 'trophy', 'Peringkat'], ['profil', 'user', 'Saya']];
   }
   function currentRoute() { const h = location.hash.replace(/^#\/?/, ''); const p = h.split('/'); return { name: p[0] || '', arg: decodeURIComponent(p.slice(1).join('/') || '') }; }
 
@@ -394,7 +394,7 @@
     else if (f.status) list = list.filter((r) => r.Status === f.status);
     if (f.area) list = list.filter((r) => r.ID_Area === f.area);
     const chips = [['aktif', 'Aktif'], ['', 'Semua']].concat(STATUSES.map((s) => [s, ST[s].l]));
-    shell(role() === 'TKNO' ? 'Riwayat Tugas' : 'Laporan',
+    shell('History',
       '<div class="chips scroll">' + chips.map((c) => '<button class="fchip ' + (f.status === c[0] ? 'on' : '') + '" data-act="setFilter" data-k="status" data-v="' + c[0] + '">' + c[1] + '</button>').join('') + '</div>' +
       '<div class="chips scroll">' + [['', 'Semua Area']].concat(S.areas.map((a) => [a.ID_Area, a.ID_Area + ' · ' + a.Nama_Area])).map((c) =>
         '<button class="fchip ' + (f.area === c[0] ? 'on' : '') + '" data-act="setFilter" data-k="area" data-v="' + c[0] + '">' + esc(c[1]) + '</button>').join('') + '</div>' +
