@@ -231,7 +231,7 @@
     $('#app').innerHTML =
       '<header class="top">' +
       (opts.back ? '<button class="iconbtn" data-act="back" aria-label="Kembali">' + ic('back') + '</button>' : '<img src="icons/logo.png" class="toplogo" alt="5R XFMR">') +
-      '<div class="toptitle"><b>' + esc(title) + '</b>' + (opts.sub ? '<small>' + esc(opts.sub) + '</small>' : '') + '</div>' + pillHTML() +
+      '<div class="toptitle"><b' + (title === '5R XFMR' ? ' class="brand"' : '') + '>' + esc(title) + '</b>' + (opts.sub ? '<small>' + esc(opts.sub) + '</small>' : '') + '</div>' + pillHTML() +
       '</header>' +
       (!navigator.onLine ? '<div class="offbar">' + ic('wifioff') + ' Mode offline — data disimpan & dikirim otomatis saat ada sinyal</div>' : '') +
       '<main class="main ' + (opts.cls || '') + '">' + body + '</main>' + nav;

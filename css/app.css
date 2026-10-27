@@ -36,6 +36,9 @@ input, textarea, select { font: inherit; }
 h1, h2, h3 { margin: 0; }
 :focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
 
+/* ---------- Font nama aplikasi ---------- */
+.brand, .splash b, .login h1 { font-family: 'Oswald', 'Arial Narrow', 'Roboto Condensed', sans-serif; font-weight: 600; text-transform: uppercase; }
+
 /* ---------- Splash ---------- */
 .splash { min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 6px; }
 .splash img { width: 120px; height: 120px; border-radius: 24px; box-shadow: var(--shadow); }
@@ -133,7 +136,7 @@ textarea { min-height: 0; resize: vertical; }
 }
 @keyframes bgIn { from { transform: scale(1.12); filter: blur(6px); } }
 .login.glass .login-logo { width: 128px; height: 128px; border-radius: 30px; box-shadow: 0 0 0 6px rgba(255,255,255,.18), 0 18px 40px rgba(0,0,0,.45); }
-.login.glass h1 { color: #fff; font-size: 2.2rem; letter-spacing: .06em; text-shadow: 0 4px 18px rgba(0,0,0,.5); }
+.login.glass h1 { color: #fff; font-size: 2.9rem; line-height: 1.05; letter-spacing: .08em; text-shadow: 0 4px 18px rgba(0,0,0,.5); }
 .login.glass .login-sub { color: rgba(255,255,255,.88); text-shadow: 0 2px 10px rgba(0,0,0,.5); }
 .login.glass .login-sub b { color: var(--amber); letter-spacing: .04em; }
 .glass-card {
