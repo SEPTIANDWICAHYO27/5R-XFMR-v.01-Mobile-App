@@ -831,6 +831,62 @@
   }
 
   /* =========================================================
+   * Daftar anggota (tab USER / User_Roles)
+   * ========================================================= */
+  const ROLE_GROUPS = [
+    { k: 'APPROVER', t: '🛡️ Approver', d: 'Admin · AVP · JAVP · Supervisor', roles: ['ADMIN', 'AVP', 'JAVP', 'SUPERVISOR'] },
+    { k: 'TKO', t: '👷 TKO — Pelapor', d: 'Melaporkan & mengatur jobdesk', roles: ['TKO'] },
+    { k: 'TKNO', t: '🧹 TKNO — Petugas', d: 'Mengerjakan tugas kebersihan', roles: ['TKNO'] }
+  ];
+  const ROLE_ORDER = { ADMIN: 0, AVP: 1, JAVP: 2, SUPERVISOR: 3, TKO: 4, TKNO: 5 };
+  function memberStats() {
+    const m = {};
+    const get = (id) => (m[id] = m[id] || { lapor: 0, tugas: 0, poin: 0 });
+    S.reports.forEach((r) => {
+      if (r.ID_Pelapor) get(String(r.ID_Pelapor)).lapor++;
+      if (r.Status === 'Verified') {
+        if (r.ID_Petugas) { const x = get(String(r.ID_Petugas)); x.tugas++; x.poin += +r.Poin || 0; }
+        if (r.ID_Pelapor) get(String(r.ID_Pelapor)).poin += +r.Poin_Pelapor || 0;
+      }
+    });
+    return m;
+  }
+  function memberDirectory() {
+    const st = memberStats();
+    const users = S.users.slice().sort((a, b) => (ROLE_ORDER[a.roleKey] ?? 9) - (ROLE_ORDER[b.roleKey] ?? 9) || String(a.nama).localeCompare(String(b.nama)));
+    if (!users.length) return empty('👥', 'Data anggota belum termuat', 'Sinkronkan saat online.');
+    const row = (u) => {
+      const x = st[String(u.id)] || { lapor: 0, tugas: 0, poin: 0 };
+      const isMe = String(u.id) === me();
+      return '<li class="mem' + (isMe ? ' me' : '') + '" data-n="' + esc(String(u.nama).toLowerCase()) + '">' +
+        '<span class="avatar sm r-' + u.roleKey + '">' + initials(u.nama) + '</span>' +
+        '<div class="mem-n"><b>' + esc(u.nama) + (isMe ? ' <em>Anda</em>' : '') + '</b>' +
+        '<small><span class="rb r-' + u.roleKey + '">' + u.roleKey + '</span>' +
+        (u.roleKey === 'TKNO' ? x.tugas + ' tugas' : x.lapor + ' laporan' + (x.tugas ? ' · ' + x.tugas + ' tugas' : '')) + '</small></div>' +
+        '<b class="mem-p">' + (x.poin ? x.poin + '<small>poin</small>' : '') + '</b></li>';
+    };
+    return '<div class="mem-wrap"><div class="hsearch">' + ic('user') + '<input id="memq" type="search" placeholder="Cari nama anggota…"></div>' +
+      '<div class="mem-sum">' + ROLE_GROUPS.map((g) => '<div><b>' + users.filter((u) => g.roles.includes(u.roleKey)).length + '</b><small>' + g.k + '</small></div>').join('') + '</div>' +
+      ROLE_GROUPS.map((g, i) => {
+        const list = users.filter((u) => g.roles.includes(u.roleKey));
+        if (!list.length) return '';
+        return '<details class="mem-g"' + (i === 0 || g.roles.includes(role()) ? ' open' : '') + '><summary><div><b>' + g.t + '</b><small>' + g.d + '</small></div><em>' + list.length + '</em></summary>' +
+          '<ul>' + list.map(row).join('') + '</ul></details>';
+      }).join('') + '<p class="hint">Sumber: tab USER (User_Roles). Poin dihitung dari tugas terverifikasi.</p></div>';
+  }
+  function bindMemberSearch() {
+    const q = $('#memq'); if (!q) return;
+    q.oninput = () => {
+      const v = q.value.trim().toLowerCase();
+      document.querySelectorAll('.mem-g').forEach((g) => {
+        let n = 0;
+        g.querySelectorAll('.mem').forEach((li) => { const ok = !v || li.dataset.n.includes(v); li.hidden = !ok; if (ok) n++; });
+        g.hidden = v && !n; if (v && n) g.open = true;
+      });
+    };
+  }
+
+  /* =========================================================
    * VIEW: Profil
    * ========================================================= */
   async function viewProfil() {
@@ -841,7 +897,7 @@
     shell('Profil Saya',
       '<div class="card prof"><div class="avatar lg">' + initials(S.user.nama) + '</div><b>' + esc(S.user.nama) + '</b><span>NIK ' + esc(S.user.nik || S.user.id) + '</span><span class="role">' + esc(ROLE_LABEL[role()] || S.user.role) + '</span>' +
       '<div class="pts"><b>' + (pts ? pts.poin : 0) + '</b><small>Total poin</small></div></div>' +
-      section('📸 Foto Terbaru Di Tiap-Tiap Area', areaPhotoCards()) +
+      section('👥 Anggota 5R XFMR <em class="cnt">' + S.users.length + '</em>', memberDirectory()) +
       section('Pengaturan',
         '<div class="card list">' +
         '<button class="li" data-act="enablePush">' + ic('bell') + '<div><b>Notifikasi</b><small>' + ({ granted: 'Aktif ✓', denied: 'Diblokir — buka pengaturan browser', default: 'Ketuk untuk mengaktifkan', unsupported: 'Tidak didukung', 'ios-install': 'iPhone: pasang ke Layar Utama dulu' }[ps] || ps) + (XFPush.fcm ? '' : ' • mode lokal') + '</small></div></button>' +
@@ -853,6 +909,7 @@
       (isApprover() ? section('Koordinat Area (GPS)', '<div class="card">' + S.areas.map((a) => '<div class="srow"><div><b>' + esc(a.ID_Area + ' · ' + a.Nama_Area) + '</b><span>' + (a.Latitude ? esc((+a.Latitude).toFixed(5) + ', ' + (+a.Longitude).toFixed(5)) + ' · radius ' + esc(a.Radius_M || 100) + ' m' : 'Belum diatur') + '</span></div>' +
         '<button class="btn btn-ghost sm" data-act="setCoord" data-id="' + esc(a.ID_Area) + '">' + ic('pin') + 'Set di sini</button></div>').join('') + '<p class="hint">Berdiri di tengah area, lalu ketuk “Set di sini”.</p></div>') : '') +
       '<p class="foot">5R XFMR v1.0 • ' + esc(C.UNIT || '') + '</p>');
+    bindMemberSearch();
   }
 
   /* =========================================================
