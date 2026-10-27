@@ -265,11 +265,11 @@
    * ========================================================= */
   function viewLogin() {
     $('#app').innerHTML =
-      '<div class="login">' +
+      '<div class="login glass">' +
       '<img src="icons/logo.png" class="login-logo" alt="Logo 5R XFMR">' +
-      '<h1>5R XFMR</h1><p class="login-sub">Kebersihan Area Plant<br>' + esc(C.UNIT || 'Asam Sulfat & Utilitas IIIB') + '</p>' +
+      '<h1>5R XFMR</h1><p class="login-sub">Kebersihan Area Plant<br><b>' + esc(C.UNIT || 'Asam Sulfat & Utilitas IIIB') + '</b></p>' +
       (!C.API_URL ? '<div class="alert">⚙️ <b>API_URL belum diatur.</b> Isi URL Web App Apps Script di <code>config.js</code>.</div>' : '') +
-      '<form id="fLogin" class="card form" autocomplete="on">' +
+      '<form id="fLogin" class="glass-card form" autocomplete="on">' +
       '<label>' + ic('user') + ' NIK</label><input name="nik" inputmode="numeric" autocomplete="username" placeholder="Contoh: 2146103" required>' +
       '<label>' + ic('shield') + ' Kata Sandi</label><div class="pw"><input name="password" type="password" autocomplete="current-password" placeholder="••••••" required>' +
       '<button type="button" class="pw-eye" data-act="togglePw">LIHAT</button></div>' +

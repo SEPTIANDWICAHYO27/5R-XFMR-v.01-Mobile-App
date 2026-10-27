@@ -6,7 +6,7 @@
  * - Periodic Sync: tarik tugas baru & tampilkan notifikasi
  * - Web Push (FCM bila dikonfigurasi, atau push standar)
  * ========================================================= */
-const VERSION = '5r-xfmr-v1.0.2';
+const VERSION = '5r-xfmr-v1.0.3';
 const SHELL_CACHE = 'shell-' + VERSION;
 const IMG_CACHE = 'img-v1';
 const FONT_CACHE = 'font-v1';
@@ -14,7 +14,8 @@ const SHELL = [
   './', 'index.html', 'css/app.css', 'config.js',
   'js/core.js', 'js/camera.js', 'js/push.js', 'js/app.js',
   'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png',
-  'icons/logo.png', 'icons/badge-96.png'
+  'icons/logo.png', 'icons/badge-96.png',
+  'images/login-bg.jpg', 'images/login-bg-sm.jpg'
 ];
 
 importScripts('config.js', 'js/core.js');

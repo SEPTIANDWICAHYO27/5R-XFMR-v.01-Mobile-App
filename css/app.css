@@ -118,6 +118,40 @@ textarea { min-height: 0; resize: vertical; }
 .pw { position: relative; }
 .pw-eye { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); border: 0; background: var(--bg); border-radius: 10px; padding: 8px 10px; font-weight: 800; font-size: .75rem; color: var(--navy); }
 
+/* ---------- Login: latar foto CCR + kaca transparan ---------- */
+.login.glass { position: relative; justify-content: center; color: #fff; isolation: isolate; }
+.login.glass::before {
+  content: ''; position: fixed; inset: 0; z-index: -2;
+  background: url('../images/login-bg.jpg') center 38% / cover no-repeat, url('../images/login-bg-sm.jpg') center 38% / cover no-repeat, #1B2A5B;
+  transform: scale(1.04); animation: bgIn 1.2s ease-out both;
+}
+.login.glass::after {
+  content: ''; position: fixed; inset: 0; z-index: -1;
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(27,42,91,.25) 0%, rgba(27,42,91,.70) 55%, rgba(10,16,38,.92) 100%),
+    linear-gradient(180deg, rgba(10,16,38,.35) 0%, rgba(10,16,38,.10) 35%, rgba(10,16,38,.75) 100%);
+}
+@keyframes bgIn { from { transform: scale(1.12); filter: blur(6px); } }
+.login.glass .login-logo { width: 128px; height: 128px; border-radius: 30px; box-shadow: 0 0 0 6px rgba(255,255,255,.18), 0 18px 40px rgba(0,0,0,.45); }
+.login.glass h1 { color: #fff; font-size: 2.2rem; letter-spacing: .06em; text-shadow: 0 4px 18px rgba(0,0,0,.5); }
+.login.glass .login-sub { color: rgba(255,255,255,.88); text-shadow: 0 2px 10px rgba(0,0,0,.5); }
+.login.glass .login-sub b { color: var(--amber); letter-spacing: .04em; }
+.glass-card {
+  width: 100%; padding: 22px 18px; border-radius: 24px;
+  background: linear-gradient(160deg, rgba(255,255,255,.22), rgba(255,255,255,.08));
+  border: 1px solid rgba(255,255,255,.35);
+  box-shadow: 0 24px 60px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.4);
+  -webkit-backdrop-filter: blur(18px) saturate(150%); backdrop-filter: blur(18px) saturate(150%);
+  animation: up .5s ease-out both;
+}
+.glass-card label { color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,.4); }
+.glass-card input { background: rgba(255,255,255,.92); border-color: rgba(255,255,255,.6); }
+.glass-card input:focus { border-color: var(--amber); box-shadow: 0 0 0 4px rgba(245,164,0,.35); }
+.glass-card .btn-primary { background: linear-gradient(135deg, var(--amber), #FFC93C); color: var(--navy); box-shadow: 0 10px 24px rgba(245,164,0,.45); }
+.login.glass .foot { color: rgba(255,255,255,.75); }
+.login.glass .alert { background: rgba(254,243,199,.95); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .glass-card { background: rgba(27,42,91,.82); } }
+
 /* ---------- Home ---------- */
 .greet { display: flex; align-items: center; gap: 12px; }
 .greet small { display: block; color: var(--ink2); font-weight: 600; }
