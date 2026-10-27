@@ -81,10 +81,13 @@
         redirect: 'follow',
         cache: 'no-store'
       });
-    } catch (e) { throw err('Tidak ada koneksi', 'NETWORK'); }
+    } catch (e) {
+      throw err(navigator.onLine === false ? 'Tidak ada koneksi internet'
+        : 'Server tidak bisa dihubungi. Admin: pastikan Web App Apps Script di-deploy dengan akses "Anyone".', 'NETWORK');
+    }
     if (!res.ok) throw err('Server sibuk (' + res.status + ')', 'NETWORK');
     let j;
-    try { j = await res.json(); } catch (e) { throw err('Respon server tidak valid', 'NETWORK'); }
+    try { j = await res.json(); } catch (e) { throw err('Respon server tidak valid (cek akses "Anyone" & deploy versi baru Apps Script)', 'NETWORK'); }
     if (!j.ok) throw err(j.error || 'Gagal', j.code || 'SERVER');
     return j.data;
   }
