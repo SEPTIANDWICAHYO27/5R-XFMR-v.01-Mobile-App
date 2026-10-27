@@ -799,37 +799,31 @@
     A2: { icon: '🍳', koor: 'Ahmad Afandi', fungsi: 'Ruang istirahat & dapur operator', desc: 'Barak dengan dapur, meja makan, musala, loker, area cuci-jemur & wudhu, kamar mandi, serta lorong hall of fame menuju CCR.', fokus: ['Dapur & meja makan bersih', 'Kamar mandi kering & wangi', 'Loker & gantungan PDL rapi', 'Area wudhu tidak tergenang'] },
     A3: { icon: '🛏️', koor: 'Purnawan', fungsi: 'Barak lantai dasar (ground floor)', desc: 'Barak operator lantai dasar: musala, meja operator, kursi istirahat, loker, lemari peralatan kerja, dapur kecil, area sanitasi dan area jemur.', fokus: ['Musala bersih & rapi', 'Lemari peralatan tertata', 'Area sanitasi higienis', 'Akuarium & kulkas terawat'] }
   };
-  function areaInfoCards() {
-    const from = monthStart();
-    return '<div class="ainfo-list">' + S.areas.map((a) => {
-      const info = AREA_INFO[a.ID_Area] || { icon: '📍', fungsi: '', desc: '', fokus: [] };
+  function areaPhotoCards() {
+    return '<div class="aphoto-list">' + S.areas.map((a) => {
+      const info = AREA_INFO[a.ID_Area] || { icon: '📍', fungsi: '' };
       const rs = S.reports.filter((r) => r.ID_Area === a.ID_Area);
-      const open = rs.filter((r) => ['Pending', 'In Progress'].includes(r.Status));
-      const month = rs.filter((r) => new Date(r.Timestamp) >= from);
-      const lastClean = rs.filter((r) => r.Resolved_At).sort((x, y) => new Date(y.Resolved_At) - new Date(x.Resolved_At))[0];
-      const rates = month.map((r) => +r.Rating).filter(Boolean);
-      const avgR = rates.length ? (rates.reduce((x, y) => x + y, 0) / rates.length).toFixed(1).replace('.', ',') : '—';
-      const titik = titikList(a.ID_Area);
-      const sched = S.schedules.filter((x) => x.ID_Area === a.ID_Area && String(x.Aktif).toUpperCase() !== 'FALSE');
-      const hasGps = a.Latitude !== '' && a.Latitude != null && !isNaN(parseFloat(a.Latitude));
-      return '<article class="ainfo" style="--ac:' + areaColor(a.ID_Area) + '">' +
+      const open = rs.filter((r) => ['Pending', 'In Progress'].includes(r.Status)).length;
+      const photos = [];
+      rs.forEach((r) => {
+        if (r.Foto_After_URL) photos.push({ url: r.Foto_After_URL, kind: 'SESUDAH', t: r.Resolved_At || r.Updated_At || r.Timestamp, r: r });
+        if (r.Foto_Before_URL) photos.push({ url: r.Foto_Before_URL, kind: 'SEBELUM', t: r.Timestamp, r: r });
+      });
+      photos.sort((x, y) => new Date(y.t) - new Date(x.t));
+      const hero = photos[0];
+      const rest = photos.slice(1, 13);
+      const link = (p) => '#/r/' + encodeURIComponent(p.r.ID_Laporan);
+      const cap = (p) => '<span class="ap-k ' + (p.kind === 'SESUDAH' ? 'ok' : 'bad') + '">' + p.kind + '</span>';
+      return '<article class="aphoto" style="--ac:' + areaColor(a.ID_Area) + '">' +
         '<header><span class="ai-ic">' + info.icon + '</span><div><small>' + esc(a.ID_Area.replace('A', 'AREA ')) + '</small><h3>' + esc(a.Nama_Area) + '</h3>' +
-        (info.fungsi ? '<span class="ai-fn">' + esc(info.fungsi) + '</span>' : '') + '</div>' +
-        '<span class="ai-st ' + (open.length ? 'warn' : 'ok') + '">' + (open.length ? open.length + ' kotor' : '✓ Bersih') + '</span></header>' +
-        (info.desc ? '<p class="ai-desc">' + esc(info.desc) + '</p>' : '') +
-        '<div class="ai-grid">' +
-        '<div><small>Koordinator</small><b>' + esc(a.Koordinator || info.koor || '—') + '</b></div>' +
-        '<div><small>Lokasi</small><b>Gedung STG 17,5</b></div>' +
-        '<div><small>Laporan bulan ini</small><b>' + month.length + '</b></div>' +
-        '<div><small>Rating rata²</small><b>' + avgR + (rates.length ? ' ★' : '') + '</b></div>' +
-        '<div><small>Terakhir dibersihkan</small><b>' + (lastClean ? timeAgo(lastClean.Resolved_At) : '—') + '</b></div>' +
-        '<div><small>Jadwal rutin</small><b>' + (sched.length ? sched.length + ' jadwal' : '—') + '</b></div>' +
-        '</div>' +
-        (info.fokus.length ? '<div class="ai-focus"><small>Fokus 5R</small><ul>' + info.fokus.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul></div>' : '') +
-        (titik.length ? '<details class="ai-titik"><summary>' + ic('pin') + titik.length + ' titik / aset di area ini</summary><ol>' +
-          titik.map((t) => { const n = open.filter((r) => r.Titik === t).length; return '<li>' + esc(t) + (n ? ' <em>' + n + ' kotor</em>' : '') + '</li>'; }).join('') + '</ol></details>' : '') +
-        '<div class="ai-tags"><span>' + ic('qr') + esc(a.QR_Code_ID || '—') + '</span>' +
-        (hasGps ? '<a target="_blank" rel="noopener" href="https://maps.google.com/?q=' + a.Latitude + ',' + a.Longitude + '">' + ic('nav') + 'Buka Maps</a>' : '<span class="muted">' + ic('pin') + 'Koordinat belum diatur</span>') + '</div>' +
+        '<span class="ai-fn">' + (photos.length ? photos.length + ' foto · terbaru ' + timeAgo(hero.t) : 'Belum ada foto') + '</span></div>' +
+        '<span class="ai-st ' + (open ? 'warn' : 'ok') + '">' + (open ? open + ' kotor' : '✓ Bersih') + '</span></header>' +
+        (hero ? '<a class="ap-hero" href="' + link(hero) + '"><img loading="lazy" src="' + esc(hero.url) + '" alt="Foto terbaru ' + esc(a.Nama_Area) + '">' +
+          '<div class="ap-ov">' + cap(hero) + '<b>' + catOf(hero.r.Kategori).e + ' ' + esc(hero.r.Kategori) + (hero.r.Titik ? ' — ' + esc(hero.r.Titik) : '') + '</b>' +
+          '<small>' + ic('clock') + fmtDate(hero.t) + (hero.r.Nama_Petugas && hero.kind === 'SESUDAH' ? ' · ' + esc(hero.r.Nama_Petugas) : '') + '</small></div></a>'
+          : '<div class="ap-empty">' + ic('camera') + '<span>Belum ada foto di area ini</span></div>') +
+        (rest.length ? '<div class="ap-strip">' + rest.map((p) => '<a href="' + link(p) + '" class="ap-th"><img loading="lazy" src="' + esc(p.url) + '" alt="">' + cap(p) +
+          '<small>' + timeAgo(p.t) + '</small></a>').join('') + '</div>' : '') +
         '<div class="row2"><button class="btn btn-primary" data-act="laporArea" data-id="' + esc(a.ID_Area) + '">' + ic('camera') + 'LAPOR</button>' +
         '<button class="btn btn-ghost" data-act="historyArea" data-id="' + esc(a.ID_Area) + '">' + ic('list') + 'HISTORY</button></div>' +
         '</article>';
@@ -847,7 +841,7 @@
     shell('Profil Saya',
       '<div class="card prof"><div class="avatar lg">' + initials(S.user.nama) + '</div><b>' + esc(S.user.nama) + '</b><span>NIK ' + esc(S.user.nik || S.user.id) + '</span><span class="role">' + esc(ROLE_LABEL[role()] || S.user.role) + '</span>' +
       '<div class="pts"><b>' + (pts ? pts.poin : 0) + '</b><small>Total poin</small></div></div>' +
-      section('📍 Deskripsi Area', areaInfoCards()) +
+      section('📸 Foto Terbaru Di Tiap-Tiap Area', areaPhotoCards()) +
       section('Pengaturan',
         '<div class="card list">' +
         '<button class="li" data-act="enablePush">' + ic('bell') + '<div><b>Notifikasi</b><small>' + ({ granted: 'Aktif ✓', denied: 'Diblokir — buka pengaturan browser', default: 'Ketuk untuk mengaktifkan', unsupported: 'Tidak didukung', 'ios-install': 'iPhone: pasang ke Layar Utama dulu' }[ps] || ps) + (XFPush.fcm ? '' : ' • mode lokal') + '</small></div></button>' +
