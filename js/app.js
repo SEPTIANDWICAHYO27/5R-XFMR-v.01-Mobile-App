@@ -893,7 +893,6 @@
     const errs = (await XF.kv.get('syncErrors')) || [];
     const ps = XFPush.status();
     const pts = leaderboard('poin', 'all').find((p) => String(p.id) === me());
-    const standalone = XFPush.isStandalone();
     shell('Profil Saya',
       '<div class="card prof"><div class="avatar lg">' + initials(S.user.nama) + '</div><b>' + esc(S.user.nama) + '</b><span>NIK ' + esc(S.user.nik || S.user.id) + '</span><span class="role">' + esc(ROLE_LABEL[role()] || S.user.role) + '</span>' +
       '<div class="pts"><b>' + (pts ? pts.poin : 0) + '</b><small>Total poin</small></div></div>' +
@@ -902,7 +901,6 @@
         '<div class="card list">' +
         '<button class="li" data-act="enablePush">' + ic('bell') + '<div><b>Notifikasi</b><small>' + ({ granted: 'Aktif ✓', denied: 'Diblokir — buka pengaturan browser', default: 'Ketuk untuk mengaktifkan', unsupported: 'Tidak didukung', 'ios-install': 'iPhone: pasang ke Layar Utama dulu' }[ps] || ps) + (XFPush.fcm ? '' : ' • mode lokal') + '</small></div></button>' +
         '<button class="li" data-act="syncNow">' + ic('refresh') + '<div><b>Sinkronkan sekarang</b><small>' + (S.pending ? S.pending + ' data menunggu dikirim' : 'Semua data terkirim ✓') + '</small></div></button>' +
-        (!standalone ? '<button class="li" data-act="install">' + ic('download') + '<div><b>Pasang Aplikasi</b><small>' + (XFPush.isIOS() ? 'Safari: Bagikan ⬆️ → Tambah ke Layar Utama' : 'Tambahkan ke layar utama HP') + '</small></div></button>' : '') +
         '<button class="li danger" data-act="logout">' + ic('logout') + '<div><b>Keluar</b><small>' + esc(S.user.nama) + '</small></div></button>' +
         '</div>') +
       (errs.length ? section('Riwayat gagal kirim', '<div class="card">' + errs.slice(-5).reverse().map((e) => '<p class="muted">• ' + fmtDate(e.at) + ' — ' + esc(e.action) + ': ' + esc(e.error) + '</p>').join('') + '</div>') : '') +
