@@ -280,7 +280,7 @@
       e.preventDefault();
       const f = e.target, b = f.querySelector('button[type=submit]');
       if (!navigator.onLine) return toast('Login pertama butuh internet', 'err');
-      b.disabled = true; b.textContent = 'MEMERIKSA…';
+      b.disabled = true; b.textContent = 'CHECK-IN…';
       try {
         const d = await XF.api('login', { nik: f.nik.value.trim(), password: f.password.value });
         await XF.kv.set('token', d.token);
