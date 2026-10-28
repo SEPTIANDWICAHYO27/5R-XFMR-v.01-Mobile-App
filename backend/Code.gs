@@ -15,7 +15,7 @@
  * =========================================================
  */
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 const TZ = 'Asia/Jakarta';
 const SH = {
   USERS: 'USER',
@@ -127,10 +127,11 @@ const ACTIONS = {
   deleteSchedule: deleteSchedule_,
   runSchedules: function (p, u) { mustApprover_(u); return { created: generateScheduledTasks() }; },
   setAreaCoord: setAreaCoord_,
-  savePushToken: savePushToken_
+  savePushToken: savePushToken_,
+  testPush: function (p, u) { notify_([u.id], '🔔 Tes notifikasi 5R XFMR', 'Notifikasi berhasil diterima di perangkat ini.', ''); return { ok: true, devices: pushCount_(u.id) }; }
 };
 const WRITE_ACTIONS = ['createReport', 'assign', 'start', 'resolve', 'verify', 'reject', 'rate', 'saveSchedule',
-  'deleteSchedule', 'setAreaCoord', 'savePushToken', 'logout', 'runSchedules'];
+  'deleteSchedule', 'setAreaCoord', 'savePushToken', 'logout', 'runSchedules', 'testPush'];
 
 function json(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 
@@ -440,7 +441,7 @@ function schedulesList_() {
 }
 
 function bootstrap_(p, u) {
-  return { user: u, users: usersList_(), areas: areasList_(), schedules: schedulesList_(), serverTime: new Date().toISOString() };
+  return { vapidPublicKey: vapidKeys_().pub, user: u, users: usersList_(), areas: areasList_(), schedules: schedulesList_(), serverTime: new Date().toISOString() };
 }
 
 /** Delta sync: laporan yang berubah sejak `since` + notifikasi untuk user */
@@ -836,41 +837,163 @@ function notify_(userIds, title, body, reportId) {
 }
 
 function sendPush_(userIds, title, body, reportId, rows) {
-  const pr = PropertiesService.getScriptProperties();
-  const projectId = pr.getProperty('FCM_PROJECT_ID');
-  if (!projectId) return; // FCM belum dikonfigurasi → cukup polling
-  const at = fcmAccessToken_();
-  if (!at) return;
   const pt = table_(dbSS_(), SH.PUSH);
-  const reqs = [], meta = [];
-  userIds.forEach(function (uid, i) {
-    pt.rows.forEach(function (r, k) {
-      if (String(r[pt.i.ID_User]) !== String(uid)) return;
-      const url = './#/r/' + encodeURIComponent(reportId || '');
-      reqs.push({
+  const want = {};
+  userIds.forEach(function (uid, i) { want[String(uid)] = i; });
+  const web = [], fcm = [];
+  pt.rows.forEach(function (r, k) {
+    const uid = String(r[pt.i.ID_User]);
+    if (!(uid in want)) return;
+    const tok = String(r[pt.i.Token] || '');
+    if (!tok) return;
+    (/^https:\/\//.test(tok) ? web : fcm).push({ k: k, tok: tok, i: want[uid] });
+  });
+  const dead = [];
+
+  // 1) Web Push standar (VAPID, tanpa payload) — tidak perlu Firebase.
+  //    HP menerima "colekan", lalu Service Worker mengambil isi notifikasi dari sheet Notifications.
+  if (web.length) {
+    const reqs = web.map(function (x) {
+      return {
+        url: x.tok, method: 'post', muteHttpExceptions: true, payload: '',
+        headers: { TTL: '86400', Urgency: 'high', Authorization: vapidAuth_(x.tok) }
+      };
+    });
+    UrlFetchApp.fetchAll(reqs).forEach(function (r, n) {
+      const c = r.getResponseCode();
+      if (c === 404 || c === 410) dead.push(web[n].k);
+      else if (c >= 400) log_('SYSTEM', 'webpush', c + ' ' + String(r.getContentText()).slice(0, 200));
+    });
+  }
+
+  // 2) Firebase Cloud Messaging (opsional, bila diatur)
+  const projectId = PropertiesService.getScriptProperties().getProperty('FCM_PROJECT_ID');
+  const at = fcm.length && projectId ? fcmAccessToken_() : null;
+  if (at) {
+    const reqs = fcm.map(function (x) {
+      return {
         url: 'https://fcm.googleapis.com/v1/projects/' + projectId + '/messages:send',
         method: 'post', contentType: 'application/json', muteHttpExceptions: true,
         headers: { Authorization: 'Bearer ' + at },
-        payload: JSON.stringify({
-          message: {
-            token: r[pt.i.Token],
-            data: { title: String(title), body: String(body), url: reportId ? url : './', tag: String(rows[i][0]) },
-            webpush: { headers: { Urgency: 'high', TTL: '86400' } }
-          }
-        })
-      });
-      meta.push(k);
+        payload: JSON.stringify({ message: { token: x.tok,
+          data: { title: String(title), body: String(body), url: reportId ? './#/r/' + encodeURIComponent(reportId) : './', tag: String(rows[x.i][0]) },
+          webpush: { headers: { Urgency: 'high', TTL: '86400' } } } })
+      };
     });
-  });
-  if (!reqs.length) return;
-  const res = UrlFetchApp.fetchAll(reqs);
-  const dead = [];
-  res.forEach(function (r, i) {
-    const c = r.getResponseCode();
-    if (c === 404 || (c === 400 && /UNREGISTERED|INVALID_ARGUMENT/.test(r.getContentText()))) dead.push(meta[i]);
-  });
-  dead.sort(function (a, b) { return b - a; }).forEach(function (k) { pt.sh.deleteRow(k + 2); });
+    UrlFetchApp.fetchAll(reqs).forEach(function (r, n) {
+      const c = r.getResponseCode();
+      if (c === 404 || (c === 400 && /UNREGISTERED|INVALID_ARGUMENT/.test(r.getContentText()))) dead.push(fcm[n].k);
+    });
+  }
+  dead.sort(function (a, b) { return b - a; }).forEach(function (k) { pt.sh.deleteRow(k + (pt.hr || 0) + 2); });
 }
+
+function pushCount_(uid) {
+  const pt = table_(dbSS_(), SH.PUSH);
+  return pt.rows.filter(function (r) { return String(r[pt.i.ID_User]) === String(uid); }).length;
+}
+
+/* =========================================================
+ *  VAPID (Web Push) — ECDSA P-256 / ES256 murni JavaScript (BigInt)
+ *  Apps Script tidak punya ECDSA bawaan, jadi tanda tangan dihitung di sini.
+ * ========================================================= */
+const P256_ = (function () {
+  const p = 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffffn;
+  const a = p - 3n;
+  const n = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+  const G = [0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296n,
+    0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5n];
+  const mod = function (x, m) { x %= m; return x < 0n ? x + m : x; };
+  function inv(x, m) {
+    let r0 = mod(x, m), r1 = m, s0 = 1n, s1 = 0n;
+    while (r1) { const q = r0 / r1; [r0, r1] = [r1, r0 - q * r1]; [s0, s1] = [s1, s0 - q * s1]; }
+    return mod(s0, m);
+  }
+  function add(P, Q) {
+    if (!P) return Q; if (!Q) return P;
+    let l;
+    if (P[0] === Q[0]) {
+      if (mod(P[1] + Q[1], p) === 0n) return null;
+      l = mod((3n * P[0] * P[0] + a) * inv(2n * P[1], p), p);
+    } else {
+      l = mod((Q[1] - P[1]) * inv(Q[0] - P[0], p), p);
+    }
+    const x = mod(l * l - P[0] - Q[0], p);
+    return [x, mod(l * (P[0] - x) - P[1], p)];
+  }
+  function mul(k, P) { let R = null, Q = P; while (k > 0n) { if (k & 1n) R = add(R, Q); Q = add(Q, Q); k >>= 1n; } return R; }
+  const toU = function (b) { return b.map(function (v) { return v & 255; }); };
+  const toS = function (b) { return b.map(function (v) { return v > 127 ? v - 256 : v; }); };
+  const big = function (b) { return toU(b).reduce(function (x, v) { return (x << 8n) | BigInt(v); }, 0n); };
+  const bytes = function (x, len) { const o = []; for (let i = 0; i < len; i++) { o.unshift(Number(x & 255n)); x >>= 8n; } return o; };
+  const hmac = function (key, msg) { return toU(Utilities.computeHmacSha256Signature(toS(msg), toS(key))); };
+  const sha = function (b) { return toU(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, toS(b))); };
+  const utf8 = function (s) { return toU(Utilities.newBlob(s).getBytes()); };
+  /** Kunci baru: d acak (UUID × SHA-256), publik = d·G */
+  function generate() {
+    let seed = '';
+    for (let i = 0; i < 4; i++) seed += Utilities.getUuid() + Date.now() + Math.random();
+    const d = mod(big(sha(utf8(seed))), n - 1n) + 1n;
+    const Q = mul(d, G);
+    return { d: d.toString(16), pub: [4].concat(bytes(Q[0], 32), bytes(Q[1], 32)) };
+  }
+  /** ES256 (RFC 6979, k deterministik) → 64 byte r||s */
+  function sign(dHex, msgBytes) {
+    const d = BigInt('0x' + dHex);
+    const h = sha(msgBytes), z = big(h);
+    const x = bytes(d, 32), h1 = bytes(mod(z, n), 32);
+    let V = new Array(32).fill(1), K = new Array(32).fill(0);
+    K = hmac(K, V.concat([0], x, h1)); V = hmac(K, V);
+    K = hmac(K, V.concat([1], x, h1)); V = hmac(K, V);
+    for (;;) {
+      V = hmac(K, V);
+      const k = big(V);
+      if (k > 0n && k < n) {
+        const r = mod(mul(k, G)[0], n);
+        const s = mod(inv(k, n) * (z + r * d), n);
+        if (r !== 0n && s !== 0n) return bytes(r, 32).concat(bytes(s, 32));
+      }
+      K = hmac(K, V.concat([0])); V = hmac(K, V);
+    }
+  }
+  return { generate: generate, sign: sign, utf8: utf8, toS: toS };
+})();
+
+function b64url_(bytesOrStr) {
+  return Utilities.base64EncodeWebSafe(bytesOrStr).replace(/=+$/, '');
+}
+
+/** Kunci VAPID disimpan di Script Properties (dibuat sekali otomatis) */
+function vapidKeys_() {
+  const pr = PropertiesService.getScriptProperties();
+  let d = pr.getProperty('VAPID_PRIVATE'), pub = pr.getProperty('VAPID_PUBLIC');
+  if (!d || !pub) {
+    const k = P256_.generate();
+    d = k.d; pub = b64url_(P256_.toS(k.pub));
+    pr.setProperty('VAPID_PRIVATE', d); pr.setProperty('VAPID_PUBLIC', pub);
+  }
+  return { d: d, pub: pub };
+}
+
+/** Header Authorization VAPID untuk satu endpoint (JWT ES256, cache per origin 11 jam) */
+function vapidAuth_(endpoint) {
+  const aud = endpoint.match(/^https:\/\/[^/]+/)[0];
+  const c = CacheService.getScriptCache();
+  const key = 'vapid_' + Utilities.base64EncodeWebSafe(aud).slice(0, 200);
+  const hit = c.get(key);
+  if (hit) return hit;
+  const v = vapidKeys_();
+  const now = Math.floor(Date.now() / 1000);
+  const head = b64url_(JSON.stringify({ typ: 'JWT', alg: 'ES256' }));
+  const claim = b64url_(JSON.stringify({ aud: aud, exp: now + 12 * 3600, sub: 'https://septiandwicahyo27.github.io/5R-XFMR-v.01-Mobile-App/' }));
+  const sig = b64url_(P256_.toS(P256_.sign(v.d, P256_.utf8(head + '.' + claim))));
+  const auth = 'vapid t=' + head + '.' + claim + '.' + sig + ', k=' + v.pub;
+  c.put(key, auth, 11 * 3600);
+  return auth;
+}
+
+/** Jalankan dari editor: buat/lihat kunci VAPID */
+function cekVapid() { Logger.log('VAPID public key: ' + vapidKeys_().pub); }
 
 /** OAuth2 access token dari Service Account (JWT RS256) — cache 55 menit */
 function fcmAccessToken_() {

@@ -145,6 +145,7 @@
     S.areas = (await XF.kv.get('areas')) || [];
     S.users = ((await XF.kv.get('users')) || []).map((u) => Object.assign(u, { roleKey: roleKey(u.role) }));
     S.schedules = (await XF.kv.get('schedules')) || [];
+    S.pushBannerOff = (await XF.kv.get('pushBannerOff')) || 0;
     S.reports = (await XF.reports.all()).sort(sortByTime);
     S.pending = await XF.outbox.count();
   }
@@ -182,6 +183,7 @@
     await XF.kv.set('areas', d.areas || []);
     await XF.kv.set('users', d.users || []);
     await XF.kv.set('schedules', d.schedules || []);
+    if (d.vapidPublicKey) await XF.kv.set('vapid', d.vapidPublicKey);
   }
 
   async function handleNotifs(list) {
@@ -309,10 +311,19 @@
     return homeTKO();
   }
 
+  function pushBanner() {
+    const st = XFPush.status();
+    if (st !== 'default' && st !== 'ios-install') return '';
+    if (S.pushBannerOff && Date.now() - S.pushBannerOff < 3 * 864e5) return '';
+    return '<div class="pbanner">' + ic('bell') + '<div><b>Aktifkan notifikasi</b><small>' +
+      (st === 'ios-install' ? 'iPhone: pasang dulu ke Layar Utama (Bagikan → Tambah ke Layar Utama), lalu buka dari ikon.' : 'Supaya tugas baru & hasil verifikasi langsung muncul di HP.') + '</small></div>' +
+      (st === 'default' ? '<button class="btn btn-primary sm" data-act="enablePush">AKTIFKAN</button>' : '') +
+      '<button class="pb-x" data-act="dismissPushBanner" aria-label="Tutup">' + ic('x') + '</button></div>';
+  }
   function greet() {
     const h = new Date().getHours();
     const g = h < 11 ? 'Selamat pagi' : h < 15 ? 'Selamat siang' : h < 18 ? 'Selamat sore' : 'Selamat malam';
-    return '<div class="greet"><div class="avatar">' + initials(S.user.nama) + '</div><div><small>' + g + ',</small><b>' + esc(S.user.nama) + '</b><span class="role">' + esc(ROLE_LABEL[role()] || S.user.role) + '</span></div></div>';
+    return pushBanner() + '<div class="greet"><div class="avatar">' + initials(S.user.nama) + '</div><div><small>' + g + ',</small><b>' + esc(S.user.nama) + '</b><span class="role">' + esc(ROLE_LABEL[role()] || S.user.role) + '</span></div></div>';
   }
 
   function areaTiles() {
@@ -899,7 +910,8 @@
       section('👥 Anggota 5R XFMR <em class="cnt">' + S.users.length + '</em>', memberDirectory()) +
       section('Pengaturan',
         '<div class="card list">' +
-        '<button class="li" data-act="enablePush">' + ic('bell') + '<div><b>Notifikasi</b><small>' + ({ granted: 'Aktif ✓', denied: 'Diblokir — buka pengaturan browser', default: 'Ketuk untuk mengaktifkan', unsupported: 'Tidak didukung', 'ios-install': 'iPhone: pasang ke Layar Utama dulu' }[ps] || ps) + (XFPush.fcm ? '' : ' • mode lokal') + '</small></div></button>' +
+        '<button class="li" data-act="enablePush">' + ic('bell') + '<div><b>Notifikasi</b><small>' + ({ granted: 'Aktif ✓', denied: 'Diblokir — buka pengaturan browser', default: 'Ketuk untuk mengaktifkan', unsupported: 'Tidak didukung', 'ios-install': 'iPhone: pasang ke Layar Utama dulu' }[ps] || ps) + '' + '</small></div></button>' +
+        (ps === 'granted' ? '<button class="li" data-act="testPush">' + ic('bell') + '<div><b>Kirim notifikasi uji</b><small>Cek apakah notifikasi sampai ke HP ini</small></div></button>' : '') +
         '<button class="li" data-act="syncNow">' + ic('refresh') + '<div><b>Sinkronkan sekarang</b><small>' + (S.pending ? S.pending + ' data menunggu dikirim' : 'Semua data terkirim ✓') + '</small></div></button>' +
         '<button class="li danger" data-act="logout">' + ic('logout') + '<div><b>Keluar</b><small>' + esc(S.user.nama) + '</small></div></button>' +
         '</div>') +
@@ -1086,9 +1098,22 @@
     rankPeriod: (b) => { S.rank.period = b.dataset.v; viewRank(); },
 
     /* --- Profil --- */
+    testPush: async () => {
+      if (!navigator.onLine) return toast('Butuh internet untuk tes', 'err');
+      try {
+        await XFPush.enable();
+        await XF.sync();
+        const d = await XF.api('testPush', {});
+        toast(d.devices ? 'Terkirim ke ' + d.devices + ' perangkat — tunggu beberapa detik' : 'Perangkat belum terdaftar. Ketuk Notifikasi dulu.', d.devices ? 'ok' : 'err');
+      } catch (e) { toast(e.message, 'err'); }
+    },
+    dismissPushBanner: async (b) => { await XF.kv.set('pushBannerOff', Date.now()); b.closest('.pbanner').remove(); },
     enablePush: async () => {
-      try { const m = await XFPush.enable(); toast(m === 'fcm' ? 'Notifikasi push aktif ✓' : 'Notifikasi aktif ✓ (mode lokal)', 'ok'); } catch (e) { toast(e.message, 'err'); }
-      viewProfil();
+      try {
+        const m = await XFPush.enable();
+        toast(m === 'local' ? 'Notifikasi aktif ✓ (saat aplikasi terbuka)' : 'Notifikasi push aktif ✓', 'ok');
+      } catch (e) { toast(e.message, 'err'); }
+      render();
     },
     install: async () => {
       if (S.installEvt) { S.installEvt.prompt(); await S.installEvt.userChoice; S.installEvt = null; viewProfil(); }

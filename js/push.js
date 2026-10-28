@@ -42,7 +42,7 @@
       }
     } catch (_) { /* tidak didukung */ }
 
-    if (!HAS_FCM) return 'local';
+    if (!HAS_FCM) return subscribeWebPush(reg);
     await loadScript(FB + 'firebase-app-compat.js');
     await loadScript(FB + 'firebase-messaging-compat.js');
     if (!g.firebase.apps.length) g.firebase.initializeApp(C.FIREBASE);
@@ -59,6 +59,30 @@
     // Pesan saat aplikasi sedang dibuka (foreground)
     m.onMessage((p) => g.dispatchEvent(new CustomEvent('xf-push', { detail: (p && p.data) || {} })));
     return 'fcm';
+  }
+
+  /* Web Push standar (VAPID) — kunci publik dari server (bootstrap) */
+  function keyBytes(b64) {
+    const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+    const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+  }
+  async function subscribeWebPush(reg) {
+    if (!reg.pushManager) return 'local';
+    const key = await XF.kv.get('vapid');
+    if (!key) return 'local'; // server lama tanpa VAPID → tetap mode lokal
+    let sub = await reg.pushManager.getSubscription();
+    const savedKey = await XF.kv.get('vapidUsed');
+    if (sub && savedKey && savedKey !== key) { await sub.unsubscribe(); sub = null; }
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) });
+    await XF.kv.set('vapidUsed', key);
+    const ep = sub.endpoint;
+    if ((await XF.kv.get('pushToken')) !== ep) {
+      await XF.kv.set('pushToken', ep);
+      await XF.enqueue('savePushToken', { pushToken: ep, platform: (isIOS() ? 'iOS ' : '') + navigator.userAgent.slice(0, 100) });
+      XF.sync();
+    }
+    return 'webpush';
   }
 
   async function initIfGranted() {

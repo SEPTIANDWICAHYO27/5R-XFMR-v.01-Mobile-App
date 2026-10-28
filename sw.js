@@ -6,7 +6,7 @@
  * - Periodic Sync: tarik tugas baru & tampilkan notifikasi
  * - Web Push (FCM bila dikonfigurasi, atau push standar)
  * ========================================================= */
-const VERSION = '5r-xfmr-v1.0.14';
+const VERSION = '5r-xfmr-v1.1.0';
 const SHELL_CACHE = 'shell-' + VERSION;
 const IMG_CACHE = 'img-v1';
 const FONT_CACHE = 'font-v1';
@@ -35,9 +35,29 @@ if (HAS_FCM) {
   } catch (e) { /* FCM gagal dimuat: tetap jalan tanpa push */ }
 } else {
   self.addEventListener('push', (e) => {
-    let d = {};
-    try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data && e.data.text() }; }
-    e.waitUntil(showNotif(d.data || d));
+    e.waitUntil((async () => {
+      let d = null;
+      try { d = e.data ? e.data.json() : null; } catch (_) { d = e.data ? { body: e.data.text() } : null; }
+      if (d && (d.title || (d.data && d.data.title))) return showNotif(d.data || d);
+      // Push tanpa isi (VAPID dari Apps Script): ambil notifikasi terbaru dari server
+      const wins = await self.clients.matchAll({ type: 'window' });
+      const focused = wins.some((c) => c.focused);
+      try {
+        await XF.sync();
+        const out = await XF.pull(false);
+        const list = out.notifications || [];
+        if (list.length) {
+          for (const n of list.slice(-4)) {
+            await showNotif({ title: n.Judul, body: n.Pesan, tag: n.ID, url: n.ID_Laporan ? './#/r/' + encodeURIComponent(n.ID_Laporan) : './' });
+          }
+          await broadcast({ type: 'synced' });
+          return;
+        }
+      } catch (_) { /* offline / sesi habis */ }
+      // Aplikasi sedang dibuka di depan (Android/PC): cukup segarkan layar
+      if (focused && !/iPhone|iPad|iPod/.test(self.navigator.userAgent)) return broadcast({ type: 'synced' });
+      return showNotif({ title: '5R XFMR', body: 'Ada pembaruan tugas. Ketuk untuk membuka.', tag: 'xfmr-update' });
+    })());
   });
 }
 
